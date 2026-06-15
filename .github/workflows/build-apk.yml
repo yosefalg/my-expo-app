@@ -3,8 +3,13 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      build_failed: ${{ steps.build.outcome == 'failure' }}
+      error_log: ${{ steps.capture_error.outputs.error_log }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -14,7 +19,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts
 
       - name: Setup EAS
         uses: expo/expo-github-action@v8
@@ -22,17 +27,68 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build APK on EAS servers
+      - name: Build APK
+        id: build
         working-directory: artifacts/omnivision
         run: eas build --platform android --profile preview --non-interactive
+        continue-on-error: true
 
-      - name: Download APK
-        working-directory: artifacts/omnivision
+      - name: Capture error log
+        id: capture_error
+        if: steps.build.outcome == 'failure'
         run: |
-          APK_URL=$(eas build:list --platform android --limit 1 --json --non-interactive | python3 -c "import sys,json; builds=json.load(sys.stdin); print(builds[0]['artifacts']['buildUrl'])")
-          curl -L "$APK_URL" -o app-release.apk
+          ERROR=$(cat /tmp/eas_error.log 2>/dev/null || echo "Build step failed - check EAS logs")
+          echo "error_log=$ERROR" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v4
+      - name: AI Auto-Fix
+        if: steps.build.outcome == 'failure'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🤖 Asking Claude to fix the build error..."
+
+          # Read current workflow and eas.json
+          WORKFLOW=$(cat .github/workflows/build-apk.yml)
+          EAS_JSON=$(cat artifacts/omnivision/eas.json 2>/dev/null || echo "{}")
+          APP_JSON=$(cat artifacts/omnivision/app.json 2>/dev/null || echo "{}")
+
+          # Ask Claude for fix
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 2000,
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"You are a CI/CD expert. Fix this Expo EAS build error.\n\nError: ${{ steps.capture_error.outputs.error_log }}\n\nCurrent workflow:\n$WORKFLOW\n\neas.json:\n$EAS_JSON\n\napp.json:\n$APP_JSON\n\nRespond ONLY with valid JSON: {\\\"workflow\\\": \\\"full yaml content\\\", \\\"eas_json\\\": {}, \\\"explanation\\\": \\\"what was fixed\\\"}\"
+              }]
+            }")
+
+          # Extract and apply fixes
+          FIXED_WORKFLOW=$(echo $RESPONSE | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          text = data['content'][0]['text']
+          fix = json.loads(text)
+          print(fix.get('workflow', ''))
+          " 2>/dev/null)
+
+          if [ -n "$FIXED_WORKFLOW" ]; then
+            echo "$FIXED_WORKFLOW" > .github/workflows/build-apk.yml
+            git config user.name "Claude AI Bot"
+            git config user.email "claude-bot@omnivision.ai"
+            git add .github/workflows/build-apk.yml
+            git commit -m "🤖 Auto-fix: Claude repaired build workflow"
+            git push
+            echo "✅ Claude fixed and pushed the workflow!"
+          fi
+
+      - name: Upload APK
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: artifacts/omnivision/app-release.apk
+          path: artifacts/omnivision/*.apk
