@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetMe } from "@workspace/api-client-react";
@@ -21,12 +21,13 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout, isAuthenticated } = useAuth();
-  const { t, language, setLanguage, isRTL } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const { data: me } = useGetMe({ query: { enabled: isAuthenticated } });
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const planColor = PLAN_COLORS[me?.plan ?? user?.plan ?? "free"] ?? "#6B7280";
   const usedPct = me?.searchesUsed && me?.searchesLimit ? me.searchesUsed / me.searchesLimit : 0;
+  const displayUser = me ?? user;
 
   const handleLogout = async () => {
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -34,7 +35,20 @@ export default function ProfileScreen() {
     router.replace("/auth");
   };
 
-  const displayUser = me ?? user;
+  const socialLinks = [
+    {
+      name: "Facebook",
+      icon: "facebook" as const,
+      color: "#1877F2",
+      url: "https://www.facebook.com/share/1BcqW4fMoG/",
+    },
+    {
+      name: "Instagram",
+      icon: "instagram" as const,
+      color: "#E1306C",
+      url: "https://www.instagram.com/_.k5w?igsh=MWtndWxkbnJhcGI5dg==",
+    },
+  ];
 
   return (
     <ScrollView
@@ -65,14 +79,12 @@ export default function ProfileScreen() {
         </View>
       </Animated.View>
 
-      {/* Language Selector */}
+      {/* Language */}
       <Animated.View
         entering={FadeInDown.delay(100).springify()}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       >
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-          🌐 {t.language}
-        </Text>
+        <Text style={[styles.cardTitle, { color: colors.foreground }]}>🌐 {t.language}</Text>
         <View style={styles.langRow}>
           {(["en", "ar"] as const).map((lang) => (
             <Pressable
@@ -86,10 +98,7 @@ export default function ProfileScreen() {
                 },
               ]}
             >
-              <Text style={[
-                styles.langBtnText,
-                { color: language === lang ? "#fff" : colors.mutedForeground },
-              ]}>
+              <Text style={[styles.langBtnText, { color: language === lang ? "#fff" : colors.mutedForeground }]}>
                 {lang === "ar" ? `🇮🇶 ${t.arabic}` : `🇺🇸 ${t.english}`}
               </Text>
             </Pressable>
@@ -140,8 +149,33 @@ export default function ProfileScreen() {
         ))}
       </Animated.View>
 
+      {/* Social Links */}
+      <Animated.View
+        entering={FadeInDown.delay(400).springify()}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      >
+        <Text style={[styles.cardTitle, { color: colors.foreground }]}>
+          {language === "ar" ? "تواصل مع المطور" : "Contact Developer"}
+        </Text>
+        <View style={styles.socialRow}>
+          {socialLinks.map((s) => (
+            <Pressable
+              key={s.name}
+              onPress={() => Linking.openURL(s.url)}
+              style={({ pressed }) => [
+                styles.socialBtn,
+                { backgroundColor: s.color + "15", borderColor: s.color + "40", opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Feather name={s.icon} size={22} color={s.color} />
+              <Text style={[styles.socialBtnText, { color: s.color }]}>{s.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Animated.View>
+
       {/* Sign Out */}
-      <Animated.View entering={FadeInDown.delay(400).springify()}>
+      <Animated.View entering={FadeInDown.delay(500).springify()}>
         <Pressable
           style={({ pressed }) => [
             styles.logoutBtn,
@@ -197,6 +231,14 @@ const styles = StyleSheet.create({
   infoLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   infoLabel: { fontSize: 13 },
   infoValue: { fontSize: 14, fontWeight: "600" as const },
+  socialRow: { flexDirection: "row", gap: 12 },
+  socialBtn: {
+    flex: 1, flexDirection: "row",
+    alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14,
+    borderRadius: 12, borderWidth: 1.5,
+  },
+  socialBtnText: { fontSize: 14, fontWeight: "700" as const },
   logoutBtn: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "center", gap: 10,
