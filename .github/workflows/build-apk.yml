@@ -32,10 +32,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pnpm config set only-built-dependencies esbuild dtrace-provider
-          pnpm install --no-frozen-lockfile
+          pnpm install
         env:
-          pnpm_config_supported_architectures: all
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Setup Expo / EAS
         uses: expo/expo-github-action@v8
