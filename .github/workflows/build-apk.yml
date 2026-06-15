@@ -3,13 +3,8 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      build_failed: ${{ steps.build.outcome == 'failure' }}
-      error_log: ${{ steps.capture_error.outputs.error_log }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -19,6 +14,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
+        working-directory: artifacts/omnivision
         run: pnpm install --ignore-scripts
 
       - name: Setup EAS
@@ -37,53 +33,125 @@ jobs:
         id: capture_error
         if: steps.build.outcome == 'failure'
         run: |
-          ERROR=$(cat /tmp/eas_error.log 2>/dev/null || echo "Build step failed - check EAS logs")
+          ERROR=$(cat /tmp/eas_error.log 2>/dev/null || echo "Build step failed")
           echo "error_log=$ERROR" >> $GITHUB_OUTPUT
 
-      - name: AI Auto-Fix using Gemini (Free)
+      - name: AI Auto-Fix (Multi-Provider Failover)
         if: steps.build.outcome == 'failure'
         env:
-          GEMINI_API_KEY: "AQ.Ab8RN6IWXMwcPMRoQ3x74G9TOAXj3pOpDn1_Sx0cCaj8Icb5Hw"  # <-- التوكن المطلوب
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # المفتاح 1: OpenRouter (مجاني، نماذج متعددة)
+          OPENROUTER_KEY: "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"
+          # المفتاح 2: Groq (سريع، Llama 3)
+          GROQ_KEY: "csk-p2cwfphmhf9x94k2wfc3xep5mtrkjh25rdv599p2vfttcn6e"
+          # المفتاح 3: Mistral AI (على شكل UUID)
+          MISTRAL_KEY: "bbddb442-d468-4d42-9d08-ecb9e668430b"
         run: |
-          echo "🤖 Asking Gemini to fix the build error..."
-
+          ERROR_TEXT="${{ steps.capture_error.outputs.error_log }}"
           WORKFLOW=$(cat .github/workflows/build-apk.yml)
-          EAS_JSON=$(cat artifacts/omnivision/eas.json 2>/dev/null || echo "{}")
-          APP_JSON=$(cat artifacts/omnivision/app.json 2>/dev/null || echo "{}")
-
-          RESPONSE=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$GEMINI_API_KEY" \
-            -H 'Content-Type: application/json' \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": \"You are a CI/CD expert. Fix this Expo EAS build error.\n\nError: ${{ steps.capture_error.outputs.error_log }}\n\nCurrent workflow:\n$WORKFLOW\n\neas.json:\n$EAS_JSON\n\napp.json:\n$APP_JSON\n\nRespond ONLY with valid JSON: {\\\"workflow\\\": \\\"full yaml content\\\", \\\"eas_json\\\": {}, \\\"explanation\\\": \\\"what was fixed\\\"}\"
-                }]
-              }]
-            }")
-
-          FIXED_WORKFLOW=$(echo $RESPONSE | python3 -c "
-          import sys, json
-          try:
-              data = json.load(sys.stdin)
-              text = data['candidates'][0]['content']['parts'][0]['text']
-              fix = json.loads(text)
-              print(fix.get('workflow', ''))
-          except:
-              print('')
-          " 2>/dev/null)
-
-          if [ -n "$FIXED_WORKFLOW" ]; then
-            echo "$FIXED_WORKFLOW" > .github/workflows/build-apk.yml
-            git config user.name "Gemini AI Bot"
-            git config user.email "gemini-bot@omnivision.ai"
-            git add .github/workflows/build-apk.yml
-            git commit -m "🤖 Auto-fix: Gemini repaired build workflow"
-            git push
-            echo "✅ Gemini fixed and pushed the workflow!"
-          else
-            echo "⚠️ Gemini could not generate a fix. Check API key or error."
+          
+          # دالة لإرسال الطلب وجلب الإصلاح
+          try_fix() {
+            local api_url="$1"
+            local auth_header="$2"
+            local payload="$3"
+            local model_name="$4"
+            
+            echo "🔄 Trying $model_name ..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$api_url" \
+              -H "Content-Type: application/json" \
+              -H "$auth_header" \
+              -d "$payload")
+            
+            HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              FIXED=$(echo "$BODY" | python3 -c "
+import sys, json, re
+try:
+    data = json.load(sys.stdin)
+    # محاولة استخراج النص من صيغ مختلفة (OpenRouter, Groq, Mistral)
+    if 'choices' in data:
+        text = data['choices'][0]['message']['content']
+    elif 'candidates' in data:
+        text = data['candidates'][0]['content']['parts'][0]['text']
+    else:
+        text = ''
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        fix = json.loads(match.group())
+        print(fix.get('workflow', ''))
+    else:
+        print('')
+except:
+    print('')
+" 2>/dev/null)
+              if [ -n "$FIXED" ]; then
+                echo "$FIXED" > .github/workflows/build-apk.yml
+                git config user.name "AI Bot ($model_name)"
+                git config user.email "ai-bot@omnivision.ai"
+                git add .github/workflows/build-apk.yml
+                git commit -m "🤖 Auto-fix: $model_name"
+                git push
+                echo "✅ Fixed successfully by $model_name"
+                return 0
+              fi
+            fi
+            echo "⚠️ $model_name failed (HTTP $HTTP_STATUS)"
+            return 1
+          }
+          
+          # ---------- المحاولة 1: OpenRouter (أفضل نماذج مجانية) ----------
+          PAYLOAD_OR=$(jq -n \
+            --arg err "$ERROR_TEXT" \
+            --arg wf "$WORKFLOW" \
+            '{
+              model: "meta-llama/llama-3.3-70b-instruct:free",
+              messages: [{role: "user", content: "Fix this Expo EAS build error. Output ONLY valid JSON: {\"workflow\": \"full yaml content\"}. Error: \($err)\nCurrent workflow:\n\($wf)"}],
+              max_tokens: 2000
+            }')
+          
+          if try_fix "https://openrouter.ai/api/v1/chat/completions" \
+                     "Authorization: Bearer $OPENROUTER_KEY" \
+                     "$PAYLOAD_OR" "OpenRouter(Llama3.3)"; then
+            exit 0
           fi
+          
+          # ---------- المحاولة 2: Groq (Llama 3 70B) ----------
+          PAYLOAD_GQ=$(jq -n \
+            --arg err "$ERROR_TEXT" \
+            --arg wf "$WORKFLOW" \
+            '{
+              model: "llama3-70b-8192",
+              messages: [{role: "user", content: "Fix this Expo EAS build error. Output ONLY valid JSON: {\"workflow\": \"full yaml content\"}. Error: \($err)\nWorkflow:\n\($wf)"}],
+              temperature: 0.1,
+              max_tokens: 2000
+            }')
+          
+          if try_fix "https://api.groq.com/openai/v1/chat/completions" \
+                     "Authorization: Bearer $GROQ_KEY" \
+                     "$PAYLOAD_GQ" "Groq(Llama3-70B)"; then
+            exit 0
+          fi
+          
+          # ---------- المحاولة 3: Mistral AI (نموذج Mistral Small) ----------
+          PAYLOAD_MS=$(jq -n \
+            --arg err "$ERROR_TEXT" \
+            --arg wf "$WORKFLOW" \
+            '{
+              model: "mistral-small-latest",
+              messages: [{role: "user", content: "Fix this build error. Output valid JSON: {\"workflow\": \"content\"}. Error: \($err)\nWorkflow:\n\($wf)"}],
+              max_tokens: 2000
+            }')
+          
+          if try_fix "https://api.mistral.ai/v1/chat/completions" \
+                     "Authorization: Bearer $MISTRAL_KEY" \
+                     "$PAYLOAD_MS" "Mistral(Small)"; then
+            exit 0
+          fi
+          
+          echo "❌ All AI providers failed. No fix applied."
+          exit 0
 
       - name: Upload APK
         if: steps.build.outcome == 'success'
