@@ -18,7 +18,7 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build APK
-        run: pnpm eas build --platform android --local --non-interactive
+        run: eas build --platform android --non-interactive
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
