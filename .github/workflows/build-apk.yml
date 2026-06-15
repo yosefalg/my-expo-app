@@ -1,8 +1,5 @@
 name: Build Expo Android APK
-on:
-  push:
-    branches:
-      - main
+on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,17 +8,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-      - name: Enable Corepack and install dependencies with pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
-          pnpm install --frozen-lockfile || pnpm install
-      - uses: expo/expo-github-action@v8
+      - name: Install dependencies
+        run: npm install
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build APK
-        run: npx eas build --platform android --profile preview --local
+        run: npx eas build --platform android --local --non-interactive
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
