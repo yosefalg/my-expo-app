@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: OmniVision AI Search API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: search
+    description: Visual search operations
+  - name: providers
+    description: Search provider management
+  - name: history
+    description: Search history
+  - name: admin
+    description: Admin operations
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,683 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # Auth
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Visual Search
+  /search/visual:
+    post:
+      operationId: startVisualSearch
+      tags: [search]
+      summary: Start a visual search job
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisualSearchInput"
+      responses:
+        "202":
+          description: Search job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchJob"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /search/jobs/{jobId}:
+    get:
+      operationId: getSearchJob
+      tags: [search]
+      summary: Get search job status and results
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchJob"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /search/upload:
+    post:
+      operationId: uploadSearchImage
+      tags: [search]
+      summary: Upload an image for visual search (base64)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageUploadInput"
+      responses:
+        "200":
+          description: Image uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageUploadResponse"
+        "400":
+          description: Invalid image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # History
+  /history:
+    get:
+      operationId: getSearchHistory
+      tags: [history]
+      summary: Get user search history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Search history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchHistoryPage"
+
+  /history/{id}:
+    get:
+      operationId: getSearchHistoryItem
+      tags: [history]
+      summary: Get a specific search history item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search history item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchHistoryItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSearchHistoryItem
+      tags: [history]
+      summary: Delete a search history item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Providers
+  /providers:
+    get:
+      operationId: getProviders
+      tags: [providers]
+      summary: Get all search providers
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchProvider"
+
+  /providers/{id}/toggle:
+    patch:
+      operationId: toggleProvider
+      tags: [providers]
+      summary: Enable or disable a provider
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderToggleInput"
+      responses:
+        "200":
+          description: Provider updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchProvider"
+        "404":
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Admin
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get system stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: System stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [admin]
+      summary: List all users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersPage"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # Auth schemas
+    RegisterInput:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        name:
+          type: string
+          minLength: 1
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, email, name, role, plan, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        plan:
+          type: string
+          enum: [free, pro, enterprise]
+        searchesUsed:
+          type: integer
+        searchesLimit:
+          type: integer
+        createdAt:
+          type: string
+
+    # Search schemas
+    VisualSearchInput:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl:
+          type: string
+        providerIds:
+          type: array
+          items:
+            type: string
+        options:
+          $ref: "#/components/schemas/SearchOptions"
+
+    SearchOptions:
+      type: object
+      properties:
+        maxResults:
+          type: integer
+          default: 50
+        minConfidence:
+          type: number
+          default: 0.3
+        includeMetadata:
+          type: boolean
+          default: true
+
+    ImageUploadInput:
+      type: object
+      required: [imageData, mimeType]
+      properties:
+        imageData:
+          type: string
+          description: Base64 encoded image
+        mimeType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, image/gif]
+        filename:
+          type: ["string", "null"]
+
+    ImageUploadResponse:
+      type: object
+      required: [imageUrl, imageId]
+      properties:
+        imageUrl:
+          type: string
+        imageId:
+          type: string
+
+    SearchJob:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        imageUrl:
+          type: ["string", "null"]
+        results:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        providerResults:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/ProviderResult"
+        totalResults:
+          type: ["integer", "null"]
+        processingTimeMs:
+          type: ["integer", "null"]
+        error:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+
+    SearchResult:
+      type: object
+      required: [id, url, title, confidence, source]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        title:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        confidence:
+          type: number
+        source:
+          type: string
+        providerName:
+          type: string
+        pageTitle:
+          type: ["string", "null"]
+        siteName:
+          type: ["string", "null"]
+        matchType:
+          type: string
+          enum: [exact, similar, partial]
+
+    ProviderResult:
+      type: object
+      required: [providerId, providerName, status, resultCount]
+      properties:
+        providerId:
+          type: string
+        providerName:
+          type: string
+        status:
+          type: string
+          enum: [success, failed, skipped]
+        resultCount:
+          type: integer
+        processingTimeMs:
+          type: ["integer", "null"]
+        error:
+          type: ["string", "null"]
+
+    # History schemas
+    SearchHistoryItem:
+      type: object
+      required: [id, imageUrl, status, createdAt]
+      properties:
+        id:
+          type: string
+        imageUrl:
+          type: string
+        status:
+          type: string
+        totalResults:
+          type: ["integer", "null"]
+        processingTimeMs:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        results:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    SearchHistoryPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHistoryItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # Provider schemas
+    SearchProvider:
+      type: object
+      required: [id, name, description, enabled, type]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        type:
+          type: string
+          enum: [reverse_image, ai_vision, metadata]
+        apiKeyRequired:
+          type: boolean
+        hasApiKey:
+          type: boolean
+        iconUrl:
+          type: ["string", "null"]
+        avgResponseMs:
+          type: ["integer", "null"]
+        successRate:
+          type: ["number", "null"]
+
+    ProviderToggleInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    # Admin schemas
+    AdminStats:
+      type: object
+      required: [totalUsers, totalSearches, activeUsers, searchesToday, avgResponseMs, successRate]
+      properties:
+        totalUsers:
+          type: integer
+        totalSearches:
+          type: integer
+        activeUsers:
+          type: integer
+        searchesToday:
+          type: integer
+        avgResponseMs:
+          type: integer
+        successRate:
+          type: number
+        providerStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStat"
+
+    ProviderStat:
+      type: object
+      required: [providerId, providerName, totalCalls, successCalls, avgResponseMs]
+      properties:
+        providerId:
+          type: string
+        providerName:
+          type: string
+        totalCalls:
+          type: integer
+        successCalls:
+          type: integer
+        avgResponseMs:
+          type: integer
+        successRate:
+          type: number
+
+    AdminUsersPage:
+      type: object
+      required: [users, total, page, limit]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [id, email, name, role, plan, searchesUsed, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        plan:
+          type: string
+        searchesUsed:
+          type: integer
+        searchesLimit:
+          type: integer
+        createdAt:
+          type: string
+        lastActiveAt:
+          type: ["string", "null"]

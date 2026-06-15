@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "NT1_s0_GPMi3lzdIQlJMn"
+uri = "file://artifacts/omnivision/assets/images/icon.png"
+type = "image"
+title = "generated_image"
