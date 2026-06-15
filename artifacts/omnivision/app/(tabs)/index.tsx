@@ -45,7 +45,7 @@ type UploadState = "idle" | "picking" | "uploading" | "searching";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signInAsGuest } = useAuth(); // نضيف signInAsGuest
   const { t } = useLanguage();
   const { setActiveJob } = useSearch();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -68,6 +68,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     registerForNotifications();
+    // إذا كان المستخدم ضيفاً وليس مصادقاً، نقوم بتسجيل دخول تلقائي كضيف
+    if (!isAuthenticated) {
+      signInAsGuest?.(); // استدعاء دالة تسجيل دخول الضيف إذا كانت موجودة
+    }
   }, []);
 
   useEffect(() => {
@@ -97,10 +101,6 @@ export default function HomeScreen() {
   };
 
   const handlePickImage = async (source: "camera" | "gallery") => {
-    if (!isAuthenticated) {
-      router.push("/auth");
-      return;
-    }
     setErrorMsg("");
     setUploadState("picking");
     if (Platform.OS !== "web") {
@@ -152,6 +152,7 @@ export default function HomeScreen() {
   const doSearch = async (base64Data: string, mimeType: string) => {
     setUploadState("uploading");
     try {
+      // محاولة رفع الصورة
       const uploaded = await uploadMutation.mutateAsync({
         data: { imageData: base64Data, mimeType: mimeType as any },
       });
@@ -195,21 +196,15 @@ export default function HomeScreen() {
       <Animated.View entering={FadeIn.duration(600)} style={styles.header}>
         <View>
           <Text style={[styles.greeting, { color: colors.mutedForeground }]}>
-            {isAuthenticated ? `👋 ${t.search}, ${user?.name?.split(" ")[0] ?? ""}` : "👋 Welcome"}
+            {isAuthenticated ? `👋 ${t.search}, ${user?.name?.split(" ")[0] ?? ""}` : "👋 Guest, start searching"}
           </Text>
           <Text style={[styles.title, { color: colors.foreground }]}>OmniVision</Text>
         </View>
         <Pressable
-          onPress={() => isAuthenticated ? router.push("/profile") : router.push("/auth")}
+          onPress={() => router.push("/profile")}
           style={[styles.avatarBtn, { backgroundColor: colors.primary + "20", borderColor: colors.primary + "40" }]}
         >
-          {isAuthenticated ? (
-            <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {user?.name?.[0]?.toUpperCase() ?? "G"}
-            </Text>
-          ) : (
-            <Feather name="user" size={18} color={colors.primary} />
-          )}
+          <Feather name="user" size={18} color={colors.primary} />
         </Pressable>
       </Animated.View>
 
@@ -224,7 +219,6 @@ export default function HomeScreen() {
       {/* Scan Zone */}
       <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.scanZone}>
         <View style={styles.scanWrapper}>
-          {/* Glow effect */}
           <Animated.View style={[styles.glowRing, glowStyle, { borderColor: colors.accent }]} />
 
           {selectedImage && isSearching ? (
@@ -245,10 +239,10 @@ export default function HomeScreen() {
             >
               <ScanAnimation size={140} active={false} />
               <Text style={[styles.dropHint, { color: colors.mutedForeground }]}>
-                {t.pickImage}
+                {t.pickImage || "Pick an image"}
               </Text>
               <Text style={[styles.dropSubHint, { color: colors.mutedForeground + "80" }]}>
-                {t.searchSubtitle}
+                {t.searchSubtitle || "Search visually"}
               </Text>
             </LinearGradient>
           )}
@@ -258,7 +252,7 @@ export default function HomeScreen() {
           <Animated.View entering={FadeIn} style={[styles.stateRow, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}>
             <ActivityIndicator color={colors.primary} size="small" />
             <Text style={[styles.stateText, { color: colors.primary }]}>
-              {uploadState === "uploading" ? "⬆️ رفع الصورة..." : "🔍 جاري البحث في المحركات..."}
+              {uploadState === "uploading" ? "⬆️ Uploading image..." : "🔍 Searching engines..."}
             </Text>
           </Animated.View>
         )}
@@ -281,7 +275,7 @@ export default function HomeScreen() {
               style={styles.primaryBtn}
             >
               <Feather name="image" size={22} color="#fff" />
-              <Text style={styles.primaryBtnText}>{t.gallery}</Text>
+              <Text style={styles.primaryBtnText}>{t.gallery || "Gallery"}</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -292,7 +286,7 @@ export default function HomeScreen() {
           disabled={isSearching}
         >
           <Feather name="camera" size={22} color={colors.primary} />
-          <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>{t.camera}</Text>
+          <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>{t.camera || "Camera"}</Text>
         </Pressable>
       </Animated.View>
 
@@ -311,23 +305,19 @@ export default function HomeScreen() {
         ))}
       </Animated.View>
 
-      {/* Plan badge */}
-      {isAuthenticated && (
-        <Animated.View
-          entering={FadeInDown.delay(550).springify()}
-          style={[styles.planBadge, { backgroundColor: colors.highlight, borderColor: colors.primary + "30" }]}
-        >
-          <Feather name="shield" size={14} color={colors.primary} />
-          <Text style={[styles.planText, { color: colors.primary }]}>
-            {user?.plan?.toUpperCase() ?? "FREE"}
-          </Text>
-          {user?.searchesUsed !== undefined && (
-            <Text style={[styles.planUsage, { color: colors.mutedForeground }]}>
-              · {user.searchesUsed}/{user.searchesLimit ?? "∞"}
-            </Text>
-          )}
-        </Animated.View>
-      )}
+      {/* Plan badge - Guest friendly */}
+      <Animated.View
+        entering={FadeInDown.delay(550).springify()}
+        style={[styles.planBadge, { backgroundColor: colors.highlight, borderColor: colors.primary + "30" }]}
+      >
+        <Feather name="shield" size={14} color={colors.primary} />
+        <Text style={[styles.planText, { color: colors.primary }]}>
+          GUEST
+        </Text>
+        <Text style={[styles.planUsage, { color: colors.mutedForeground }]}>
+          · 0/100 searches used
+        </Text>
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -336,10 +326,10 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 20, gap: 24 },
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  greeting: { fontSize: 13, fontWeight: "500" as const, marginBottom: 2 },
-  title: { fontSize: 30, fontWeight: "800" as const, letterSpacing: -1 },
+  greeting: { fontSize: 13, fontWeight: "500", marginBottom: 2 },
+  title: { fontSize: 30, fontWeight: "800", letterSpacing: -1 },
   avatarBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 18, fontWeight: "700" as const },
+  avatarText: { fontSize: 18, fontWeight: "700" },
   scanZone: { alignItems: "center", gap: 16 },
   scanWrapper: { alignItems: "center", justifyContent: "center" },
   glowRing: { position: "absolute", width: 280, height: 280, borderRadius: 140, borderWidth: 2, zIndex: 0 },
@@ -347,21 +337,21 @@ const styles = StyleSheet.create({
   previewImage: { width: "100%", height: "100%", borderWidth: 2, borderRadius: 20 },
   scanOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   dropZone: { width: 260, height: 260, borderRadius: 28, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center", gap: 12 },
-  dropHint: { fontSize: 15, fontWeight: "600" as const },
+  dropHint: { fontSize: 15, fontWeight: "600" },
   dropSubHint: { fontSize: 12, textAlign: "center", paddingHorizontal: 20 },
   stateRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
-  stateText: { fontSize: 13, fontWeight: "600" as const },
+  stateText: { fontSize: 13, fontWeight: "600" },
   actions: { gap: 12 },
   primaryBtnWrapper: { borderRadius: 16, overflow: "hidden" },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, height: 56, borderRadius: 16 },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" as const },
+  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   secondaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, height: 52, borderRadius: 16, borderWidth: 1.5 },
-  secondaryBtnText: { fontSize: 16, fontWeight: "600" as const },
+  secondaryBtnText: { fontSize: 16, fontWeight: "600" },
   disabled: { opacity: 0.5 },
   featureRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
   chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 11, fontWeight: "500" as const },
+  chipText: { fontSize: 11, fontWeight: "500" },
   planBadge: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 10, borderWidth: 1 },
-  planText: { fontSize: 12, fontWeight: "700" as const },
+  planText: { fontSize: 12, fontWeight: "700" },
   planUsage: { fontSize: 12 },
 });
