@@ -3,6 +3,9 @@ import { View, Text, Pressable, StyleSheet, Animated } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
+// ⚠️ أمان: التوكن مكتوب صراحةً – لا تشارك هذا الملف مع أي شخص
+const GEMINI_API_KEY = "AQ.Ab8RN6IWXMwcPMRoQ3x74G9TOAXj3pOpDn1_Sx0cCaj8Icb5Hw";
+
 interface Props {
   error: string;
   onDismiss: () => void;
@@ -24,30 +27,35 @@ export function ErrorReporter({ error, onDismiss, onAIFix }: Props) {
     }).start();
   }, []);
 
-  const askClaude = async () => {
+  const askGemini = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": process.env.EXPO_PUBLIC_ANTHROPIC_KEY ?? "",
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 300,
-          messages: [{
-            role: "user",
-            content: `App error in OmniVision React Native app: "${error}". Give a SHORT user-friendly fix suggestion in Arabic (max 2 sentences).`,
-          }],
-        }),
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `App error in OmniVision React Native app: "${error}". Give a SHORT user-friendly fix suggestion in Arabic (max 2 sentences).`,
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
       const data = await response.json();
-      const text = data.content?.[0]?.text ?? "";
+      const text =
+        data.candidates?.[0]?.content?.parts?.[0]?.text ??
+        "حدث خطأ في الاتصال، حاول مرة أخرى.";
       setSuggestion(text);
       onAIFix?.(text);
-    } catch {
+    } catch (err) {
       setSuggestion("تحقق من اتصالك بالإنترنت وأعد المحاولة.");
     } finally {
       setLoading(false);
@@ -58,7 +66,11 @@ export function ErrorReporter({ error, onDismiss, onAIFix }: Props) {
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: "#1a0a0a", borderColor: "#EF444440", transform: [{ translateY: slideAnim }] },
+        {
+          backgroundColor: "#1a0a0a",
+          borderColor: "#EF444440",
+          transform: [{ translateY: slideAnim }],
+        },
       ]}
     >
       <View style={styles.header}>
@@ -75,17 +87,17 @@ export function ErrorReporter({ error, onDismiss, onAIFix }: Props) {
 
       {suggestion ? (
         <View style={styles.suggestionBox}>
-          <Text style={styles.suggestionLabel}>💡 اقتراح Claude:</Text>
+          <Text style={styles.suggestionLabel}>💡 اقتراح Gemini:</Text>
           <Text style={styles.suggestionText}>{suggestion}</Text>
         </View>
       ) : (
         <Pressable
           style={[styles.aiBtn, { opacity: loading ? 0.6 : 1 }]}
-          onPress={askClaude}
+          onPress={askGemini}
           disabled={loading}
         >
           <Text style={styles.aiBtnText}>
-            {loading ? "⏳ جاري التحليل..." : "🤖 اسأل Claude لإصلاحه"}
+            {loading ? "⏳ جاري التحليل..." : "🤖 اسأل Gemini لإصلاحه"}
           </Text>
         </Pressable>
       )}
@@ -102,7 +114,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
   },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: "#EF4444", fontWeight: "700", fontSize: 14 },
   errorText: { color: "#94A3B8", fontSize: 13, lineHeight: 20 },
@@ -115,7 +131,12 @@ const styles = StyleSheet.create({
     borderColor: "#10B98130",
   },
   suggestionLabel: { color: "#10B981", fontSize: 12, fontWeight: "700" },
-  suggestionText: { color: "#E2E8F0", fontSize: 13, lineHeight: 20, textAlign: "right" },
+  suggestionText: {
+    color: "#E2E8F0",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "right",
+  },
   aiBtn: {
     backgroundColor: "#1E3A5F",
     borderRadius: 10,
