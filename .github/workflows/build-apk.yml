@@ -7,16 +7,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+      - name: Install pnpm
+        run: npm install -g pnpm
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build APK
-        run: npx eas build --platform android --local --non-interactive
+        run: pnpm eas build --platform android --local --non-interactive
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
