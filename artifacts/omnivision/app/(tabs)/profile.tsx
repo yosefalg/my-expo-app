@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetMe } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { ConfidenceBar } from "@/components/ConfidenceBar";
 import { useColors } from "@/hooks/useColors";
 
@@ -20,6 +21,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout, isAuthenticated } = useAuth();
+  const { t, language, setLanguage, isRTL } = useLanguage();
   const { data: me } = useGetMe({ query: { enabled: isAuthenticated } });
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
@@ -31,21 +33,6 @@ export default function ProfileScreen() {
     await logout();
     router.replace("/auth");
   };
-
-  if (!isAuthenticated) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background, paddingTop: topPad }]}>
-        <Feather name="user" size={48} color={colors.mutedForeground} />
-        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Not signed in</Text>
-        <Pressable
-          style={[styles.ctaBtn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push("/auth")}
-        >
-          <Text style={{ color: "#fff", fontWeight: "700" as const, fontSize: 15 }}>Sign In</Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   const displayUser = me ?? user;
 
@@ -61,11 +48,11 @@ export default function ProfileScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Avatar section */}
+      {/* Avatar */}
       <Animated.View entering={FadeIn.duration(500)} style={styles.avatarSection}>
         <View style={[styles.avatar, { backgroundColor: planColor + "20", borderColor: planColor + "40" }]}>
           <Text style={[styles.avatarChar, { color: planColor }]}>
-            {displayUser?.name?.[0]?.toUpperCase() ?? "U"}
+            {displayUser?.name?.[0]?.toUpperCase() ?? "G"}
           </Text>
         </View>
         <Text style={[styles.userName, { color: colors.foreground }]}>{displayUser?.name}</Text>
@@ -78,41 +65,70 @@ export default function ProfileScreen() {
         </View>
       </Animated.View>
 
+      {/* Language Selector */}
+      <Animated.View
+        entering={FadeInDown.delay(100).springify()}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      >
+        <Text style={[styles.cardTitle, { color: colors.foreground }]}>
+          🌐 {t.language}
+        </Text>
+        <View style={styles.langRow}>
+          {(["en", "ar"] as const).map((lang) => (
+            <Pressable
+              key={lang}
+              onPress={() => setLanguage(lang)}
+              style={[
+                styles.langBtn,
+                {
+                  backgroundColor: language === lang ? colors.primary : colors.muted,
+                  borderColor: language === lang ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Text style={[
+                styles.langBtnText,
+                { color: language === lang ? "#fff" : colors.mutedForeground },
+              ]}>
+                {lang === "ar" ? `🇮🇶 ${t.arabic}` : `🇺🇸 ${t.english}`}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Animated.View>
+
       {/* Usage */}
       {displayUser?.searchesLimit != null && (
         <Animated.View
-          entering={FadeInDown.delay(150).springify()}
+          entering={FadeInDown.delay(200).springify()}
           style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Search Usage</Text>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>{t.searchUsage}</Text>
           <ConfidenceBar
-            label={`${displayUser.searchesUsed ?? 0} / ${displayUser.searchesLimit} searches used`}
+            label={`${displayUser.searchesUsed ?? 0} / ${displayUser.searchesLimit}`}
             value={usedPct}
             color={planColor}
           />
-          {(displayUser.plan === "free") && (
-            <Pressable
-              style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {}}
-            >
+          {displayUser.plan === "free" && (
+            <Pressable style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}>
               <Feather name="zap" size={14} color="#fff" />
-              <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
+              <Text style={styles.upgradeBtnText}>{t.upgradePro}</Text>
             </Pressable>
           )}
         </Animated.View>
       )}
 
-      {/* Stats */}
+      {/* Account Info */}
       <Animated.View
-        entering={FadeInDown.delay(250).springify()}
+        entering={FadeInDown.delay(300).springify()}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       >
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>Account Info</Text>
+        <Text style={[styles.cardTitle, { color: colors.foreground }]}>{t.accountInfo}</Text>
         {[
-          { icon: "user" as const, label: "Name", value: displayUser?.name },
-          { icon: "mail" as const, label: "Email", value: displayUser?.email },
-          { icon: "shield" as const, label: "Plan", value: displayUser?.plan?.toUpperCase() },
-          { icon: "settings" as const, label: "Role", value: displayUser?.role },
+          { icon: "user" as const, label: t.name, value: displayUser?.name },
+          { icon: "mail" as const, label: t.email, value: displayUser?.email },
+          { icon: "shield" as const, label: t.plan, value: displayUser?.plan?.toUpperCase() },
+          { icon: "settings" as const, label: t.role, value: displayUser?.role },
         ].map((item) => (
           <View key={item.label} style={[styles.infoRow, { borderTopColor: colors.border }]}>
             <View style={styles.infoLeft}>
@@ -124,8 +140,8 @@ export default function ProfileScreen() {
         ))}
       </Animated.View>
 
-      {/* Logout */}
-      <Animated.View entering={FadeInDown.delay(350).springify()}>
+      {/* Sign Out */}
+      <Animated.View entering={FadeInDown.delay(400).springify()}>
         <Pressable
           style={({ pressed }) => [
             styles.logoutBtn,
@@ -134,7 +150,7 @@ export default function ProfileScreen() {
           onPress={handleLogout}
         >
           <Feather name="log-out" size={18} color="#EF4444" />
-          <Text style={{ color: "#EF4444", fontWeight: "600" as const, fontSize: 15 }}>Sign Out</Text>
+          <Text style={{ color: "#EF4444", fontWeight: "600" as const, fontSize: 15 }}>{t.signOut}</Text>
         </Pressable>
       </Animated.View>
     </ScrollView>
@@ -143,65 +159,47 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   content: { paddingHorizontal: 20, gap: 16 },
   avatarSection: { alignItems: "center", gap: 8, paddingVertical: 8 },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 80, height: 80, borderRadius: 40,
+    borderWidth: 2, alignItems: "center", justifyContent: "center",
   },
   avatarChar: { fontSize: 32, fontWeight: "800" as const },
   userName: { fontSize: 22, fontWeight: "800" as const, letterSpacing: -0.5 },
   userEmail: { fontSize: 14 },
   planBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 20, borderWidth: 1,
   },
   planText: { fontSize: 12, fontWeight: "700" as const },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
+  card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 12 },
   cardTitle: { fontSize: 14, fontWeight: "700" as const, letterSpacing: 0.2 },
+  langRow: { flexDirection: "row", gap: 10 },
+  langBtn: {
+    flex: 1, paddingVertical: 12,
+    borderRadius: 12, borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
+  },
+  langBtnText: { fontSize: 14, fontWeight: "600" as const },
   upgradeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 6,
+    paddingVertical: 10, borderRadius: 10,
   },
   upgradeBtnText: { color: "#fff", fontWeight: "700" as const, fontSize: 14 },
   infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "row", alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 10,
-    borderTopWidth: 1,
+    paddingTop: 10, borderTopWidth: 1,
   },
   infoLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   infoLabel: { fontSize: 13 },
   infoValue: { fontSize: 14, fontWeight: "600" as const },
-  emptyTitle: { fontSize: 20, fontWeight: "700" as const },
-  ctaBtn: { paddingHorizontal: 28, paddingVertical: 13, borderRadius: 14 },
   logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 10,
+    height: 52, borderRadius: 14, borderWidth: 1.5,
   },
 });
