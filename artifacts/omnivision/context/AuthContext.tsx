@@ -22,45 +22,35 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
+const GUEST_USER: User = {
+  id: "guest",
+  email: "guest@omnivision.ai",
+  name: "Guest",
+  role: "user",
+  plan: "free",
+  searchesUsed: 0,
+  searchesLimit: 100,
+  createdAt: new Date().toISOString(),
+};
+
 const AuthContext = createContext<AuthContextType>({
-  user: null,
-  token: null,
-  isLoading: true,
+  user: GUEST_USER,
+  token: "guest-token",
+  isLoading: false,
   login: async () => {},
   logout: async () => {},
-  isAuthenticated: false,
+  isAuthenticated: true,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(GUEST_USER);
+  const [token, setToken] = useState<string | null>("guest-token");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
-    loadStoredAuth();
-  }, []);
-
-  useEffect(() => {
     setAuthTokenGetter(() => token);
   }, [token]);
-
-  const loadStoredAuth = async () => {
-    try {
-      const [storedToken, storedUser] = await Promise.all([
-        AsyncStorage.getItem("@omnivision_token"),
-        AsyncStorage.getItem("@omnivision_user"),
-      ]);
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const login = useCallback(async (newToken: string, newUser: User) => {
     await Promise.all([
@@ -76,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.removeItem("@omnivision_token"),
       AsyncStorage.removeItem("@omnivision_user"),
     ]);
-    setToken(null);
-    setUser(null);
+    setToken("guest-token");
+    setUser(GUEST_USER);
   }, []);
 
   return (
@@ -88,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         logout,
-        isAuthenticated: !!token,
+        isAuthenticated: true,
       }}
     >
       {children}
