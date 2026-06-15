@@ -40,50 +40,49 @@ jobs:
           ERROR=$(cat /tmp/eas_error.log 2>/dev/null || echo "Build step failed - check EAS logs")
           echo "error_log=$ERROR" >> $GITHUB_OUTPUT
 
-      - name: AI Auto-Fix
+      - name: AI Auto-Fix using Gemini (Free)
         if: steps.build.outcome == 'failure'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: "AQ.Ab8RN6IWXMwcPMRoQ3x74G9TOAXj3pOpDn1_Sx0cCaj8Icb5Hw"  # <-- التوكن المطلوب
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🤖 Asking Claude to fix the build error..."
+          echo "🤖 Asking Gemini to fix the build error..."
 
-          # Read current workflow and eas.json
           WORKFLOW=$(cat .github/workflows/build-apk.yml)
           EAS_JSON=$(cat artifacts/omnivision/eas.json 2>/dev/null || echo "{}")
           APP_JSON=$(cat artifacts/omnivision/app.json 2>/dev/null || echo "{}")
 
-          # Ask Claude for fix
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
+          RESPONSE=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$GEMINI_API_KEY" \
+            -H 'Content-Type: application/json' \
             -d "{
-              \"model\": \"claude-sonnet-4-6\",
-              \"max_tokens\": 2000,
-              \"messages\": [{
-                \"role\": \"user\",
-                \"content\": \"You are a CI/CD expert. Fix this Expo EAS build error.\n\nError: ${{ steps.capture_error.outputs.error_log }}\n\nCurrent workflow:\n$WORKFLOW\n\neas.json:\n$EAS_JSON\n\napp.json:\n$APP_JSON\n\nRespond ONLY with valid JSON: {\\\"workflow\\\": \\\"full yaml content\\\", \\\"eas_json\\\": {}, \\\"explanation\\\": \\\"what was fixed\\\"}\"
+              \"contents\": [{
+                \"parts\": [{
+                  \"text\": \"You are a CI/CD expert. Fix this Expo EAS build error.\n\nError: ${{ steps.capture_error.outputs.error_log }}\n\nCurrent workflow:\n$WORKFLOW\n\neas.json:\n$EAS_JSON\n\napp.json:\n$APP_JSON\n\nRespond ONLY with valid JSON: {\\\"workflow\\\": \\\"full yaml content\\\", \\\"eas_json\\\": {}, \\\"explanation\\\": \\\"what was fixed\\\"}\"
+                }]
               }]
             }")
 
-          # Extract and apply fixes
           FIXED_WORKFLOW=$(echo $RESPONSE | python3 -c "
           import sys, json
-          data = json.load(sys.stdin)
-          text = data['content'][0]['text']
-          fix = json.loads(text)
-          print(fix.get('workflow', ''))
+          try:
+              data = json.load(sys.stdin)
+              text = data['candidates'][0]['content']['parts'][0]['text']
+              fix = json.loads(text)
+              print(fix.get('workflow', ''))
+          except:
+              print('')
           " 2>/dev/null)
 
           if [ -n "$FIXED_WORKFLOW" ]; then
             echo "$FIXED_WORKFLOW" > .github/workflows/build-apk.yml
-            git config user.name "Claude AI Bot"
-            git config user.email "claude-bot@omnivision.ai"
+            git config user.name "Gemini AI Bot"
+            git config user.email "gemini-bot@omnivision.ai"
             git add .github/workflows/build-apk.yml
-            git commit -m "🤖 Auto-fix: Claude repaired build workflow"
+            git commit -m "🤖 Auto-fix: Gemini repaired build workflow"
             git push
-            echo "✅ Claude fixed and pushed the workflow!"
+            echo "✅ Gemini fixed and pushed the workflow!"
+          else
+            echo "⚠️ Gemini could not generate a fix. Check API key or error."
           fi
 
       - name: Upload APK
