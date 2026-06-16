@@ -35,7 +35,6 @@ async function sendToAI(service, apiKey, code) {
     },
   });
 
-  // استخراج النص المصحح حسب الخدمة
   if (service === "gemini") {
     return response.data.candidates[0].content.parts[0].text;
   } else {
