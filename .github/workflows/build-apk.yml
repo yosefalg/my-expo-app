@@ -1,4 +1,4 @@
-name: Build Expo Android APK
+name: AI Fix and Build Expo APK
 on:
   push:
     branches:
@@ -7,48 +7,89 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  ai-fix-and-build:
     runs-on: ubuntu-latest
     steps:
+      # 1️⃣ جلب المستودع
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ إعداد Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      # 3️⃣ تثبيت axios
+      - name: Install dependencies
+        run: npm install axios
+
+      # 4️⃣ تشغيل سكربت الإصلاح بالذكاء الاصطناعي
+      - name: Run AI Fix Script
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node scripts/ai-fix.js
+
+      # 5️⃣ رفع التعديلات إلى فرع جديد
+      - name: Commit and Push AI Fixes
+        run: |
+          git config --global user.name "AI Bot"
+          git config --global user.email "bot@example.com"
+          git checkout -b ai-fixes || true
+          git add .
+          git commit -m "AI: Auto-fix project issues" || true
+          git push origin ai-fixes --force
+
+      # 6️⃣ إنشاء Pull Request تلقائي
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ai-fixes
+          base: main
+          title: "AI Auto Fixes"
+          body: |
+            🤖 هذا الـ PR تم إنشاؤه تلقائياً بواسطة الذكاء الاصطناعي.
+            يحتوي على إصلاحات للأخطاء المكتشفة في المشروع.
+
+      # 7️⃣ تثبيت pnpm
       - name: Install pnpm
         run: npm install -g pnpm
 
-      - name: Fix and Clean Lockfile Tensions
-        working-directory: artifacts/omnivision
+      # 8️⃣ تنظيف lockfiles
+      - name: Clean lockfiles
         run: |
-          # حذف ملف الـ lockfile المسبب للتضارب لإجبار السيرفر على توليد ملف نظيف متوافق
           rm -f pnpm-lock.yaml
-          rm -f ../../pnpm-lock.yaml
+          rm -f package-lock.json
+          rm -f yarn.lock
 
-      - name: Install project dependencies (Fresh Generation)
-        working-directory: artifacts/omnivision
+      # 9️⃣ إعادة تثبيت التبعيات
+      - name: Reinstall dependencies
         run: pnpm install --no-frozen-lockfile --ignore-scripts
 
+      # 🔟 إنشاء ملف .easignore
       - name: Create EAS Ignore File
-        working-directory: artifacts/omnivision
         run: |
-          # نترك مجلد الحزم لتستعمله EAS مباشرة دون إعادة تحميل
           echo ".expo" > .easignore
           echo ".git" >> .easignore
 
-      - name: Prebuild Expo (Non-Interactive)
-        working-directory: artifacts/omnivision
+      # 11️⃣ فحص المشروع
+      - name: Run Expo Doctor
+        run: npx expo doctor || true
+
+      # 12️⃣ Prebuild
+      - name: Prebuild Expo (Android)
         run: npx expo prebuild --platform android --clean --no-install
 
+      # 13️⃣ إعداد Expo EAS CLI
       - name: Setup Expo EAS CLI
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # 14️⃣ بناء APK
       - name: Build Android APK Locally
-        working-directory: artifacts/omnivision
         run: eas build --platform android --profile preview --local --non-interactive
