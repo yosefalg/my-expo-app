@@ -4,6 +4,7 @@ import axios from "axios";
 
 const mistralKey = process.env.MISTRAL_API_KEY;
 const geminiKey = process.env.GEMINI_API_KEY;
+const groqKey   = process.env.GROQ_API_KEY;
 
 async function sendToAI(service, apiKey, code) {
   let url;
@@ -11,6 +12,8 @@ async function sendToAI(service, apiKey, code) {
     url = "https://api.mistral.ai/v1/fix";
   } else if (service === "gemini") {
     url = "https://api.gemini.com/v1/fix";
+  } else if (service === "groq") {
+    url = "https://api.groq.com/v1/fix";
   }
 
   const response = await axios.post(
@@ -33,13 +36,18 @@ async function fixFile(filePath) {
   let fixedCode;
   try {
     fixedCode = await sendToAI("mistral", mistralKey, code);
-  } catch (err) {
-    console.warn("⚠️ فشل Mistral، نجرب Gemini...");
-    fixedCode = await sendToAI("gemini", geminiKey, code);
+    console.log(`✅ تم الإصلاح باستخدام Mistral: ${filePath}`);
+  } catch (err1) {
+    try {
+      fixedCode = await sendToAI("gemini", geminiKey, code);
+      console.log(`✅ تم الإصلاح باستخدام Gemini: ${filePath}`);
+    } catch (err2) {
+      fixedCode = await sendToAI("groq", groqKey, code);
+      console.log(`✅ تم الإصلاح باستخدام Groq: ${filePath}`);
+    }
   }
 
   fs.writeFileSync(filePath, fixedCode, "utf8");
-  console.log(`✅ تم إصلاح الملف: ${filePath}`);
 }
 
 function getAllFiles(dirPath, arrayOfFiles = []) {
