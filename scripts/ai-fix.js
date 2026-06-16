@@ -7,31 +7,40 @@ const geminiKey = process.env.GEMINI_API_KEY;
 const groqKey   = process.env.GROQ_API_KEY;
 
 async function sendToAI(service, apiKey, code) {
-  let url;
+  let url, payload;
+
   if (service === "mistral") {
-    url = "https://api.mistral.ai/v1/generate"; // غيّر حسب الوثائق الرسمية
+    url = "https://api.mistral.ai/v1/chat/completions";
+    payload = {
+      model: "mistral-small",
+      messages: [{ role: "user", content: `صلح الأخطاء في هذا الكود:\n\n${code}` }]
+    };
   } else if (service === "gemini") {
-    url = "https://api.gemini.com/v1/generate"; // غيّر حسب الوثائق الرسمية
+    url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+    payload = {
+      contents: [{ role: "user", parts: [{ text: `صلح الأخطاء في هذا الكود:\n\n${code}` }]}]
+    };
   } else if (service === "groq") {
-    url = "https://api.groq.com/v1/generate";   // غيّر حسب الوثائق الرسمية
+    url = "https://api.groq.com/openai/v1/chat/completions";
+    payload = {
+      model: "llama3-8b-8192",
+      messages: [{ role: "user", content: `صلح الأخطاء في هذا الكود:\n\n${code}` }]
+    };
   }
 
-  const response = await axios.post(
-    url,
-    { prompt: `صلح الأخطاء في هذا الكود:\n\n${code}` },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await axios.post(url, payload, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+  });
 
-  if (!response.data || !response.data.fixed_code) {
-    throw new Error(`❌ لم يتم إرجاع كود مصحح من ${service}`);
+  // استخراج النص المصحح حسب الخدمة
+  if (service === "gemini") {
+    return response.data.candidates[0].content.parts[0].text;
+  } else {
+    return response.data.choices[0].message.content;
   }
-
-  return response.data.fixed_code;
 }
 
 async function fixFile(filePath) {
@@ -41,11 +50,11 @@ async function fixFile(filePath) {
   try {
     fixedCode = await sendToAI("mistral", mistralKey, code);
     console.log(`✅ تم الإصلاح باستخدام Mistral: ${filePath}`);
-  } catch (err1) {
+  } catch {
     try {
       fixedCode = await sendToAI("gemini", geminiKey, code);
       console.log(`✅ تم الإصلاح باستخدام Gemini: ${filePath}`);
-    } catch (err2) {
+    } catch {
       fixedCode = await sendToAI("groq", groqKey, code);
       console.log(`✅ تم الإصلاح باستخدام Groq: ${filePath}`);
     }
