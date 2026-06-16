@@ -9,11 +9,11 @@ const groqKey   = process.env.GROQ_API_KEY;
 async function sendToAI(service, apiKey, code) {
   let url;
   if (service === "mistral") {
-    url = "https://api.mistral.ai/v1/fix";
+    url = "https://api.mistral.ai/v1/generate"; // غيّر حسب الوثائق الرسمية
   } else if (service === "gemini") {
-    url = "https://api.gemini.com/v1/fix";
+    url = "https://api.gemini.com/v1/generate"; // غيّر حسب الوثائق الرسمية
   } else if (service === "groq") {
-    url = "https://api.groq.com/v1/fix";
+    url = "https://api.groq.com/v1/generate";   // غيّر حسب الوثائق الرسمية
   }
 
   const response = await axios.post(
@@ -26,6 +26,10 @@ async function sendToAI(service, apiKey, code) {
       },
     }
   );
+
+  if (!response.data || !response.data.fixed_code) {
+    throw new Error(`❌ لم يتم إرجاع كود مصحح من ${service}`);
+  }
 
   return response.data.fixed_code;
 }
