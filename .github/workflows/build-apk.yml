@@ -60,4 +60,8 @@ jobs:
 
       - name: Build Android APK Locally
         working-directory: artifacts/omnivision
+        env:
+          # هذا السطر يمنع pnpm داخل EAS من استخدام الفحص الصارم
+          PIN_HOMEPAGE: "false"
+          CI: "false" 
         run: eas build --platform android --profile preview --local --non-interactive
