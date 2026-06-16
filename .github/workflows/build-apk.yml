@@ -1,4 +1,4 @@
-name: AI Fix and Build Expo APK
+name: AI Auto Fix and Build Expo APK
 on:
   push:
     branches:
