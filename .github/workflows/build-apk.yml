@@ -1,56 +1,75 @@
-name: Build APK (Local, No EAS)
+name: Build Android APK (OmniVision)
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
-      - name: Install dependencies
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
         working-directory: artifacts/omnivision
-        run: pnpm install --ignore-scripts
 
-      - name: Install Expo CLI
-        run: npm install -g expo-cli
+      - name: Prebuild Expo (Non-Interactive)
+        run: npx expo prebuild --platform android --clean --no-install
+        working-directory: artifacts/omnivision
 
-      - name: Setup Java 17
+      - name: Auto-Fix with AI
+        run: |
+          python3 -c "
+          import sys, json, re
+          try:
+              data = json.load(sys.stdin)
+              if 'choices' in data:
+                  text = data['choices'][0]['message']['content']
+              elif 'candidates' in data:
+                  text = data['candidates'][0]['content']
+              else:
+                  text = ''
+              
+              match = re.search(r'\{.*\}', text, re.DOTALL)
+              if match:
+                  fix = json.loads(match.group())
+                  print(fix.get('workflow', ''))
+              else:
+                  print('')
+          except Exception as e:
+              print('')
+          " > /dev/null
+
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Generate debug keystore
-        working-directory: artifacts/omnivision
-        run: |
-          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug, O=Android, C=US" -storepass android -keypass android
-
-      - name: Prebuild (generate android folder)
-        working-directory: artifacts/omnivision
-        run: npx expo prebuild --platform android --clean --no-install
-
-      - name: Build APK with Gradle
+      - name: Build Android App (Release)
+        run: ./gradlew assembleRelease
         working-directory: artifacts/omnivision/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-local
+          name: OmniVision-Release-APK
           path: artifacts/omnivision/android/app/build/outputs/apk/release/*.apk
