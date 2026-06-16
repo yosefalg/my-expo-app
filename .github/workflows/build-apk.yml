@@ -21,15 +21,22 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm
 
-      - name: Install project dependencies
+      - name: Fix and Clean Lockfile Tensions
+        working-directory: artifacts/omnivision
+        run: |
+          # حذف ملف الـ lockfile المسبب للتضارب لإجبار السيرفر على توليد ملف نظيف متوافق
+          rm -f pnpm-lock.yaml
+          rm -f ../../pnpm-lock.yaml
+
+      - name: Install project dependencies (Fresh Generation)
         working-directory: artifacts/omnivision
         run: pnpm install --no-frozen-lockfile --ignore-scripts
 
       - name: Create EAS Ignore File
         working-directory: artifacts/omnivision
         run: |
-          echo "node_modules" > .easignore
-          echo ".expo" >> .easignore
+          # نترك مجلد الحزم لتستعمله EAS مباشرة دون إعادة تحميل
+          echo ".expo" > .easignore
           echo ".git" >> .easignore
 
       - name: Prebuild Expo (Non-Interactive)
@@ -44,7 +51,4 @@ jobs:
 
       - name: Build Android APK Locally
         working-directory: artifacts/omnivision
-        env:
-          CI: "false"
-          PNPM_FLAGS: "--no-frozen-lockfile"
         run: eas build --platform android --profile preview --local --non-interactive
