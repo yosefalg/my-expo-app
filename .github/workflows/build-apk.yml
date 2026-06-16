@@ -41,7 +41,7 @@ jobs:
 
       - name: Prebuild (generate android folder)
         working-directory: artifacts/omnivision
-        run: npx expo prebuild --platform android --clean
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: Build APK with Gradle
         working-directory: artifacts/omnivision/android
