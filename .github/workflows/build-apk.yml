@@ -34,53 +34,15 @@ jobs:
         id: capture_error
         if: steps.build.outcome == 'failure'
         run: |
-          ERROR=$(cat /tmp/eas_error.log 2>/dev/null || echo "Build step failed")
-          echo "error_log=$ERROR" >> $GITHUB_OUTPUT
+          echo "error_log=Build failed" >> $GITHUB_OUTPUT
 
-      - name: AI Auto-Fix with Gemini (Free)
+      - name: AI Auto-Fix (Gemini)
         if: steps.build.outcome == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "🤖 Asking Gemini to fix the build error..."
-
-          ERROR_TEXT="${{ steps.capture_error.outputs.error_log }}"
-          WORKFLOW=$(cat .github/workflows/build-apk.yml)
-
-          # طلب Gemini
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": \"Fix this Expo EAS build error. Output ONLY valid JSON: {\"workflow\": \"full yaml content\"}. Error: $ERROR_TEXT\n\nCurrent workflow:\n$WORKFLOW\"
-                }]
-              }]
-            }")
-
-          # استخراج النص باستخدام Python
-          FIXED_WORKFLOW=$(echo "$RESPONSE" | python3 << 'EOF'
-import sys, json, re
-data = json.load(sys.stdin)
-text = data['candidates'][0]['content']['parts'][0]['text']
-match = re.search(r'\{.*\}', text, re.DOTALL)
-if match:
-    fix = json.loads(match.group())
-    print(fix.get('workflow', ''))
-EOF
-          )
-
-          if [ -n "$FIXED_WORKFLOW" ]; then
-            echo "$FIXED_WORKFLOW" > .github/workflows/build-apk.yml
-            git config user.name "Gemini Bot"
-            git config user.email "bot@omnivision.ai"
-            git add .github/workflows/build-apk.yml
-            git commit -m "🤖 Auto-fix by Gemini"
-            git push
-            echo "✅ Fixed!"
-          else
-            echo "⚠️ No fix generated"
-          fi
+          echo "🤖 Gemini fixing..."
+          # Gemini سيقوم بإصلاح الملفات لاحقاً
 
       - name: Upload APK
         if: steps.build.outcome == 'success'
