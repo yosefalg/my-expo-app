@@ -1,81 +1,36 @@
-name: AI Auto Fix and Build Expo APK
-on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
+name: AI Auto Fix Only
 
-jobs:
-  ai-fix-and-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  on:
+    workflow_dispatch:
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+  jobs:
+    ai-fix:
+      runs-on: ubuntu-latest
 
-      - name: Install dependencies
-        run: npm install axios
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
 
-      - name: Run AI Fix Script
-        env:
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: node scripts/ai-fix.js
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
 
-      - name: Commit and Push AI Fixes
-        run: |
-          git config --global user.name "AI Bot"
-          git config --global user.email "bot@example.com"
-          git checkout -b ai-fixes || true
-          git add .
-          git commit -m "AI: Auto-fix project issues" || true
-          git push origin ai-fixes --force
+        - name: Install axios
+          run: npm install axios
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ai-fixes
-          base: main
-          title: "AI Auto Fixes"
-          body: |
-            🤖 هذا الـ PR تم إنشاؤه تلقائياً بواسطة الذكاء الاصطناعي.
-            يحتوي على إصلاحات للأخطاء المكتشفة في المشروع.
+        - name: Run AI Fix Script
+          env:
+            MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+            GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+            GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          run: node scripts/ai-fix.js
 
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Fix and Clean Lockfile Tensions
-        working-directory: artifacts/omnivision
-        run: |
-          rm -f pnpm-lock.yaml
-          rm -f ../../pnpm-lock.yaml
-
-      - name: Install project dependencies (Fresh Generation)
-        working-directory: artifacts/omnivision
-        run: pnpm install --no-frozen-lockfile --ignore-scripts
-
-      - name: Create EAS Ignore File
-        working-directory: artifacts/omnivision
-        run: |
-          echo ".expo" > .easignore
-          echo ".git" >> .easignore
-
-      - name: Prebuild Expo (Non-Interactive)
-        working-directory: artifacts/omnivision
-        run: npx expo prebuild --platform android --clean --no-install
-
-      - name: Setup Expo EAS CLI
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build Android APK Locally
-        working-directory: artifacts/omnivision
-        run: eas build --platform android --profile preview --local --non-interactive
+        - name: Commit and Push AI Fixes
+          run: |
+            git config --global user.name "AI Bot"
+            git config --global user.email "bot@example.com"
+            git add .
+            git diff --staged --quiet || git commit -m "AI: Auto-fix project issues"
+            git push origin main || true
+  
