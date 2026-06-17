@@ -6,7 +6,6 @@ name: AI Auto Fix Only
   jobs:
     ai-fix:
       runs-on: ubuntu-latest
-
       steps:
         - name: Checkout repository
           uses: actions/checkout@v4
@@ -26,11 +25,11 @@ name: AI Auto Fix Only
             GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           run: node scripts/ai-fix.js
 
-        - name: Commit and Push AI Fixes
+        - name: Commit and Push
           run: |
             git config --global user.name "AI Bot"
             git config --global user.email "bot@example.com"
             git add .
-            git diff --staged --quiet || git commit -m "AI: Auto-fix project issues"
+            git diff --staged --quiet || git commit -m "AI: Auto-fix"
             git push origin main || true
   
