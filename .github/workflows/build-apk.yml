@@ -60,6 +60,10 @@ jobs:
         working-directory: artifacts/omnivision
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Disable Hermes (private class fields not supported)
+        working-directory: artifacts/omnivision/android
+        run: sed -i "s/hermesEnabled=true/hermesEnabled=false/" gradle.properties || echo "hermesEnabled=false" >> gradle.properties
+
       - name: Make gradlew executable
         working-directory: artifacts/omnivision/android
         run: chmod +x gradlew
