@@ -1,5 +1,10 @@
-const fs = require("fs");
-  const path = require("path");
+import fs from "fs";
+  import path from "path";
+  import { createRequire } from "module";
+  import { fileURLToPath } from "url";
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const require = createRequire(import.meta.url);
   const axios = require("axios");
 
   const mistralKey = process.env.MISTRAL_API_KEY;
@@ -13,18 +18,18 @@ const fs = require("fs");
       url = "https://api.mistral.ai/v1/chat/completions";
       payload = {
         model: "mistral-small",
-        messages: [{ role: "user", content: "صلح الأخطاء في هذا الكود:\n\n" + code }]
+        messages: [{ role: "user", content: "صلح الاخطاء في هذا الكود:\n\n" + code }]
       };
     } else if (service === "gemini") {
       url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey;
       payload = {
-        contents: [{ role: "user", parts: [{ text: "صلح الأخطاء في هذا الكود:\n\n" + code }] }]
+        contents: [{ role: "user", parts: [{ text: "صلح الاخطاء في هذا الكود:\n\n" + code }] }]
       };
     } else if (service === "groq") {
       url = "https://api.groq.com/openai/v1/chat/completions";
       payload = {
         model: "llama3-8b-8192",
-        messages: [{ role: "user", content: "صلح الأخطاء في هذا الكود:\n\n" + code }]
+        messages: [{ role: "user", content: "صلح الاخطاء في هذا الكود:\n\n" + code }]
       };
     }
 
@@ -37,9 +42,8 @@ const fs = require("fs");
 
     if (service === "gemini") {
       return response.data.candidates[0].content.parts[0].text;
-    } else {
-      return response.data.choices[0].message.content;
     }
+    return response.data.choices[0].message.content;
   }
 
   async function fixFile(filePath) {
@@ -48,19 +52,19 @@ const fs = require("fs");
     try {
       if (!mistralKey) throw new Error("No MISTRAL_API_KEY");
       fixedCode = await sendToAI("mistral", mistralKey, code);
-      console.log("[Mistral] تم اصلاح: " + filePath);
-    } catch (e1) {
+      console.log("[Mistral] " + filePath);
+    } catch {
       try {
         if (!geminiKey) throw new Error("No GEMINI_API_KEY");
         fixedCode = await sendToAI("gemini", geminiKey, code);
-        console.log("[Gemini] تم اصلاح: " + filePath);
-      } catch (e2) {
+        console.log("[Gemini] " + filePath);
+      } catch {
         try {
           if (!groqKey) throw new Error("No GROQ_API_KEY");
           fixedCode = await sendToAI("groq", groqKey, code);
-          console.log("[Groq] تم اصلاح: " + filePath);
-        } catch (e3) {
-          console.warn("[تخطي] فشل كل الـ APIs - " + filePath);
+          console.log("[Groq] " + filePath);
+        } catch {
+          console.warn("[SKIP] " + filePath);
           return;
         }
       }
@@ -81,39 +85,32 @@ const fs = require("fs");
     ".mp4", ".mp3", ".wav",
   ]);
 
-  function getAllFiles(dirPath, arrayOfFiles) {
-    if (!arrayOfFiles) arrayOfFiles = [];
-    var files = fs.readdirSync(dirPath);
-    for (var i = 0; i < files.length; i++) {
-      var file = files[i];
-      var fullPath = path.join(dirPath, file);
-      var stat = fs.statSync(fullPath);
-      if (stat.isDirectory()) {
-        if (!SKIP_DIRS.has(file)) getAllFiles(fullPath, arrayOfFiles);
+  function getAllFiles(dirPath, list = []) {
+    for (const file of fs.readdirSync(dirPath)) {
+      const full = path.join(dirPath, file);
+      if (fs.statSync(full).isDirectory()) {
+        if (!SKIP_DIRS.has(file)) getAllFiles(full, list);
       } else {
-        var ext = path.extname(file).toLowerCase();
-        if (!SKIP_EXTS.has(ext)) arrayOfFiles.push(fullPath);
+        if (!SKIP_EXTS.has(path.extname(file).toLowerCase())) list.push(full);
       }
     }
-    return arrayOfFiles;
+    return list;
   }
 
   async function main() {
-    var targetDir = path.resolve("artifacts/omnivision");
+    const targetDir = path.resolve("artifacts/omnivision");
     if (!fs.existsSync(targetDir)) {
-      console.error("المجلد غير موجود: " + targetDir);
+      console.error("Not found: " + targetDir);
       process.exit(1);
     }
-    var files = getAllFiles(targetDir);
-    console.log("عدد الملفات للفحص: " + files.length);
-    for (var i = 0; i < files.length; i++) {
-      await fixFile(files[i]);
-    }
-    console.log("اكتمل الاصلاح التلقائي");
+    const files = getAllFiles(targetDir);
+    console.log("Files to check: " + files.length);
+    for (const file of files) await fixFile(file);
+    console.log("Done.");
   }
 
-  main().catch(function(err) {
-    console.error("خطأ اثناء الاصلاح:", err.message);
+  main().catch(err => {
+    console.error("Error:", err.message);
     process.exit(1);
   });
   
